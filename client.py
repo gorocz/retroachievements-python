@@ -1,32 +1,23 @@
-from typing import Union
-import requests
+from datetime import time
 import json
+from typing import Union
 
+import requests
+
+from .classes import *
 from .exceptions import *
-from .classes import RAuser, achievement, game, game_user_info, user_summary
+from .converters import *
 
-def achivements_converter(a) -> achievement:
-    return achievement(id=a["ID"],
-                num_awarded=a["NumAwarded"],
-                num_awarded_hardcore=a["NumAwardedHardcore"],
-                title=a["Title"],
-                description=a["Description"],
-                points=a["Points"],
-                true_ratio=a["TrueRatio"],
-                author=a["Author"],
-                date_modified=a["DateModified"],
-                date_created=a["DateCreated"],
-                badge_name=a["BadgeName"],
-                display_order=a["DisplayOrder"],
-                mem_addr=a["MemAddr"])
 
 class RAclient:
     api_url = "https://retroachievements.org/API/"
+    NotReturned = NotReturned #we need an easy way to get it and it's the best i could find ngl
 
     def __init__(self, username, api_key, timeout=30):
         self.username = username
         self.api_key = api_key
         self.timeout = timeout
+        self.NotReturned = NotReturned #also put it here just in case
 
     def _request(self, endpoint, params={}):
         #params |= {"z": self.username, "y": self.api_key} #we simply add the auth info. breaks support for python < 3.9 so we use another method
@@ -42,50 +33,27 @@ class RAclient:
 
         This is the same values as http://retroachievements.org/globalRanking.php?s=5&t=2&f=0
 
-        :return: :class:`list` of 10 :class:`RAuser` objects with only the name, points and retro_points fields filled, all other fields are None
+        :return: :class:`list` of 10 :class:`RAuser` objects.
         """
 
         r = self._request("API_GetTopTenUsers.php").json()
-        return [RAuser(username=u["1"], raw=u, points=u["2"], retro_points=u["3"])
-                for u in r] #list of RAuser objects
+        return [RAuser_converter(u) for u in r] #list of RAuser objects
 
     def GetGameInfo(self, game_id: Union[int, str]) -> game:
         """Gets basic game informations
 
         :param game_id: The ID of the game to fetch
         :return: :class:`game` object with basic infos or :class:`None` if the game isn't found.
-        Missing infos are:
-        -achievements
-        -is_final
-        -num_achievements
-        -num_distinct_players_casual
-        -num_distinct_players_hardcore
-        -rich_presence_patch
         """
         #GameTitle, Console and GameIcon seem to be dupes of Title, ConsoleName and ImageIcon only present in the basic game infos so they aren't implemented
 
         r = self._request("API_GetGame.php", {"i": game_id}).json()
         if r["Title"] is None: #aka game doesn't exist
             return None
-        return game(game_id,
-                title=r["Title"],
-                forum_topic_id=r["ForumTopicID"],
-                console_id=r["ConsoleID"],
-                console_name=r["ConsoleName"],
-                flags=r["ConsoleName"],
-                image_icon=r["ImageIcon"],
-                image_title=r["ImageTitle"],
-                image_in_game=r["ImageIngame"],
-                image_box_art=r["ImageBoxArt"],
-                publisher=r["Publisher"],
-                developer=r["Developer"],
-                genre=r["Genre"],
-                release_date=r["Released"],
-                raw=r
-                )
+        return game_converter(r, game_id=game_id,)
 
     def GetGameInfoExtended(self, game_id: Union[int, str]) -> game:
-        """Gets all informations on a game
+        """Gets informations on a game
 
         :param game_id: The ID of the game to fetch
         :return: :class:`game` object or :class:`None` if the game isn't found.
@@ -94,28 +62,7 @@ class RAclient:
         r = self._request("API_GetGameExtended.php", {"i": game_id}).json()
         if r["Title"] is None: #aka game doesn't exist
             return None
-        return game(game_id,
-                title=r["Title"],
-                forum_topic_id=r["ForumTopicID"],
-                console_id=r["ConsoleID"],
-                console_name=r["ConsoleName"],
-                flags=r["ConsoleName"],
-                image_icon=r["ImageIcon"],
-                image_title=r["ImageTitle"],
-                image_in_game=r["ImageIngame"],
-                image_box_art=r["ImageBoxArt"],
-                publisher=r["Publisher"],
-                developer=r["Developer"],
-                genre=r["Genre"],
-                release_date=r["Released"],
-                raw=r,
-                achievements=[achivements_converter(r["Achievements"][a]) for a in r["Achievements"]], #converts everything to achivement objects
-                is_final=r["IsFinal"],
-                num_achievements=r["NumAchievements"],
-                num_distinct_players_casual=r["NumDistinctPlayersCasual"],
-                num_distinct_players_hardcore=r["NumDistinctPlayersHardcore"],
-                rich_presence_patch=r["RichPresencePatch"]
-                )
+        return game_converter(r, game_id=game_id,)
 
     def GetConsoleIDs(self) -> list:
         """Gets a list of the consoles ID and the name associated with them.
@@ -130,16 +77,14 @@ class RAclient:
         """Gets a list of games on a console.
 
         :param console_id: The ID of the console
-        :return: :class:`list` of very trimmed down :class:`game` objects, or None if the console isn't found.
-        These objects have the title, game_id, image_icon, console_id and console_name, everything else is None.
+        :return: :class:`list` of very trimmed down :class:`game` objects, the list is empty if the console isn't found.
         """
 
         r = self._request("API_GetGameList.php", params={"i": console_id}).json()
-        if r == []: #aka console not found
-            return None
+        # if r == []: #aka console not found
+        #     return None
 
-        return [game(title=g["Title"], game_id=g["ID"], console_id=g["ConsoleID"], image_icon=g["ImageIcon"], console_name=g["ConsoleName"], raw=g)
-                for g in r] #list of RAuser objects
+        return [game_converter(g) for g in r] #list of game objects
     
     #def GetFeedFor(self, user, count, offset):
     #not implemented bc no matter what i tried, API_GetFeed.php always just returned {"success":false}
@@ -156,7 +101,7 @@ class RAclient:
         r["TotalRanked"] = int(r["TotalRanked"]) #for some reason it's a string
         return r
 
-    def GetUserProgress(self, username: str, game_ids: list) -> dict:
+    def GetUserProgress(self, username: str, game_ids: list) -> list:
         """Gets infos on a game's achivements and score, as well as the progress of a user
         You can fetch infos for multiple games at once
 
@@ -170,13 +115,7 @@ class RAclient:
         r = self._request("API_GetUserProgress.php", {"u": username, "i": game_string}).json()
         games = []
         for g in r: #for each games
-            games.append(game_user_info(num_possible_achievements=r[g]["NumPossibleAchievements"],
-                                        possible_score=r[g]["PossibleScore"],
-                                        num_achieved=r[g]["NumAchieved"],
-                                        score_achieved=r[g]["ScoreAchieved"],
-                                        num_achieved_hardcore=r[g]["NumAchievedHardcore"],
-                                        score_achieved_hardcore=r[g]["ScoreAchievedHardcore"],
-                                        raw=g))
+            games.append(game_converter(r[g], game_id=g))
         return games
 
 
@@ -193,22 +132,7 @@ class RAclient:
         """
 
         r = self._request("API_GetUserRecentlyPlayedGames.php", {"u": username, "c": limit, "o": offset}).json()
-        games = []
-        for g in r: #for each games
-            user_info = game_user_info(num_possible_achievements=g["NumPossibleAchievements"],
-                                        possible_score=g["PossibleScore"],
-                                        num_achieved=g["NumAchieved"],
-                                        score_achieved=g["ScoreAchieved"],
-                                        last_played=g["LastPlayed"],
-                                        my_vote=g["MyVote"])
-            games.append(game(game_id=g["GameID"],
-                            console_id=g["ConsoleID"],
-                            console_name=g["ConsoleName"],
-                            title=g["Title"],
-                            image_icon=g["ImageIcon"],
-                            user_info=user_info,
-                            raw=g))
-        return games
+        return [game_converter(g) for g in r]
 
     def GetUserSummary(self, username: str, recent_games_count: int=5, achievements_count: int=10) -> user_summary:
         """Gets the summary of a user
@@ -216,33 +140,36 @@ class RAclient:
         :param username: a string with the username
         :param recent_games_count (optional): how many recent games to return (the API doesn't seem to have a limit)
         :param achievements_count (optional): how many achivements to return (the API won't return more than 50 at once)
-        :return: a :class:`user_summary` instance. The recently_played atttribute is a list of :class:`dict`. last_game is a complete game object. 
+        :return: a :class:`user_summary` instance. The recently_played atttribute is a list of :class:`game`. last_game is a complete game object. awarded is a list of :class:`game` with only achievements informations.
         """
             
         r = self._request("API_GetUserSummary.php", {"u": username, "g": recent_games_count, "a": achievements_count}).json()
 
-        lg = r["LastGame"]
-        return user_summary(recently_played=r["RecentlyPlayed"], #list of dicts
+        la = r["LastActivity"]
+        last_activity = activity(id=la["ID"],
+                                username=la["User"], #called username instead of user to not be mistaken for a RAuser object
+                                activity_type=la["activitytype"],
+                                data=la["data"],
+                                data2=la["data2"],
+                                last_update=la["lastupdate"],
+                                timestamp=la["timestamp"],
+                                raw=la,)
+            
+        recent_achievements = []    
+        for g in r["RecentAchievements"]: #for each game
+            for a in r["RecentAchievements"][g]: #for each achivement in that game
+                recent_achievements.append(achivements_converter(r["RecentAchievements"][g][a]))
+
+
+        return user_summary(username=username,
+            id=r["ID"],
+            awarded=[game_converter(r['Awarded'][g], game_id=g) for g in r['Awarded']],
+            last_activity=last_activity,
+            recently_played=[game_converter(g) for g in r["RecentlyPlayed"]], #list of dicts
             rich_presence_msg=r["RichPresenceMsg"],
             member_since=r["MemberSince"],
-            last_game_id=r["LastGameID"],
-            last_game=game(game_id=lg["ID"], 
-                            title=lg["Title"],
-                            console_id=lg["ConsoleID"],
-                            forum_topic_id=lg["ForumTopicID"],
-                            flags=lg["Flags"],
-                            image_icon=lg["ImageIcon"],
-                            image_title=lg["ImageTitle"],
-                            image_in_game=lg["ImageIngame"],
-                            image_box_art=lg["ImageBoxArt"],
-                            publisher=lg["Publisher"],
-                            developer=lg["Developer"],
-                            genre=lg["Genre"],
-                            release_date=lg["Released"],
-                            is_final=lg["IsFinal"],
-                            console_name=lg["ConsoleName"],
-                            raw=lg
-                            ),
+            #last_game_id=r["LastGameID"],
+            last_game=game_converter(r["LastGame"]),
             contrib_count=r["ContribCount"],
             contrib_yield=r["ContribYield"],
             total_points=r["TotalPoints"],
@@ -252,17 +179,78 @@ class RAclient:
             motto=r["Motto"],
             rank=r["Rank"],
             total_ranked=r["TotalRanked"],
-            recent_achievements=r["RecentAchievements"],
+            recent_achievements=recent_achievements,
             user_pic=r["UserPic"],
             status=r["Status"],
-            raw=r)
+            raw=r,)
 
-    def GetUserGamesCompleted(self, username: str) -> dict:
+    def GetUserGamesCompleted(self, username: str) -> list:
         """Gets the completed games of a user
 
         :param username: a string with the username
-        :return: a :class:`dict` instance with the completed games and other infos. 
+        :return: a :class:`list` of :class:`game` with the % of completion, sorted by reverse % of completion
         """
             
-        r = self._request("API_GetUserSummary.php", {"u": username}).json()
-        return r
+        r = self._request("API_GetUserCompletedGames.php", {"u": username}).json()
+        #hardcore and non-hardcore counts as separate, so we need to "fuse" them in a single game
+        #god forgive me for this unoptimized code
+        games_list=[]
+        while True:
+            try:
+                d = r.pop(0) #get the first dict and remove it 
+                for i in r: #we check every other dict to see if one has the same game_id
+                    if d["GameID"] == i["GameID"]: #we did find another game with this id
+                        if int(i["HardcoreMode"]) == 1: #i is the hardcore mode
+                            d["PctWonHardcore"] = i["PctWon"]
+                            d["NumAwardedHardcore"] = i["NumAwarded"]
+                            games_list.append(d)
+                            r.remove(i) #no need to iterate any more
+                            break
+                        else: #d is the hardcore mode
+                            i["PctWonHardcore"] = d["PctWon"]
+                            i["NumAwardedHardcore"] = d["NumAwarded"]
+                            games_list.append(i)
+                            r.remove(i) #we popped d already, but i is still in the list so we remove him
+                            break
+                else: #didn't fibd a hardcore mode (aka no break)
+                    d["PctWonHardcore"] = 0
+                    d["NumAwardedHardcore"] = 0
+                    games_list.append(d)
+
+            except IndexError: #we went over the whole list
+                break
+        
+        return [game_converter(g) for g in games_list] #we convert into actual games
+
+    def GetGameInfoAndUserProgress(self, username: str, game_id: Union[int, str]) -> game:
+        """Gets a game's info as well as the progress of a user on that game
+
+        :param username: a string with the username
+        :param game_id: the game's id
+        :return: a :class:`game` instance.
+        """
+            
+        r = self._request("API_GetGameInfoAndUserProgress.php", {"u": username, "g": game_id}).json()
+        return game_converter(r)
+
+    def GetAchievementsEarnedOnDay(self, username: str, date: datetime) -> list:
+        """Gets achievements earned by a user on a specific day
+
+        :param username: a string with the username
+        :param date: a datetime object of the day to fetch (time doesn't matter).
+        :return: a :class:`list` of :class:`achievement` instance.
+        """
+            
+        r = self._request("API_GetAchievementsEarnedOnDay.php", {"u": username, "d": date.strftime('%Y-%m-%d')}).json()
+        return [achivements_converter(a) for a in r]
+
+    #the endpoint doesn't work so not implemented
+    # def GetAchievementsEarnedBetween(self, username: str, from: datetime, to: datetime) -> list:
+    #     """Gets achievements earned by a user between two dates
+
+    #     :param username: a string with the username
+    #     :return: a :class:`list` of :class:`achievement` instance.
+    #     """
+            
+    #     r = self._request("API_GetAchievementsEarnedOnDay.php", {"u": username, "f": from.strftime('%Y-%m-%d'), "t": to.strftime('%Y-%m-%d')}).json()
+    #     return [achivements_converter(a) for a in r]
