@@ -1,4 +1,4 @@
-[![PyPI version fury.io](https://badge.fury.io/py/ansicolortags.svg)](https://pypi.python.org/pypi/retroachievements/)
+[![PyPI version fury.io](https://badge.fury.io/py/retroachievements.svg)](https://pypi.python.org/pypi/retroachievements/)
 # retroachievements-api
 ##### A python api wrapper for the retroachievements api  
 
