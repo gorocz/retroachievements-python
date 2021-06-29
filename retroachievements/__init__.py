@@ -10,7 +10,7 @@ A simple API wrapper for Retroachievements.
 
 __title__ = 'retroachievements'
 __author__ = 'Mattlau04'
-__version__ = '1.1.0'
+__version__ = '1.0.0'
 
 
 from .client import RAclient
