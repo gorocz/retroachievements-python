@@ -30,7 +30,8 @@ def achivements_converter(a) -> achievement:
                     date_awarded=try_key_or_nr(a, "DateAwarded") or try_key_or_nr(a, "DateEarned") or try_key_or_nr(a, "Date"),
                     date_awarded_hardcore=try_key_or_nr(a, "DateEarnedHardcore"),
                     hardcore_achieved=try_key_or_nr(a, "HardcoreMode"),
-                    console_name=try_key_or_nr(a, "ConsoleName"),)
+                    console_name=try_key_or_nr(a, "ConsoleName"),
+                    a_type=try_key_or_nr(a, "type"),)
 
 
 def RAuser_converter(u) -> RAuser:
