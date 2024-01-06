@@ -10,7 +10,7 @@ from .converters import *
 
 
 class RAclient:
-    api_url = "https://retroachievements.org/API/"
+    api_url = "https://retroachievements.org/API"
     NotReturned = NotReturned #we need an easy way to get it and it's the best i could find ngl
 
     def __init__(self, username, api_key, timeout=30):
