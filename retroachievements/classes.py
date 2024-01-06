@@ -92,7 +92,8 @@ class achievement:
                 date_awarded=NotReturned,
                 date_awarded_hardcore=NotReturned,
                 hardcore_achieved=NotReturned,
-                console_name=NotReturned,):
+                console_name=NotReturned,
+                a_type=NotReturned,):
 
         self.id = int_or_none(id)
         self.game_id = int_or_none(game_id)
@@ -115,6 +116,7 @@ class achievement:
         self.date_awarded_hardcore = strptime_or_none(date_awarded_hardcore) #should be named DateEarnedHardcore but renamed for constitency
         self.hardcore_achieved = bool_or_none(hardcore_achieved) #for some reason it's often wrong in user summmary so it returns NotReturned there
         self.console_name = console_name
+        self.a_type=a_type
         #CumulScore not implemented bc it works wackily and you should use sum() instead
 
         self.raw = raw
